@@ -1,8 +1,3 @@
-# Ejemplo de como desplegar en un ambiente de prueba un framework FIWARE para 
-# una aplicacion de ciudad inteligente / Internet de las Cosas
-# 
-# En este ejemplo vamos a usar un sensor que lee la temperatura de una termocupla
-# y la almacena en una base de datos en un servidor FiWARE en la Nube
 # sudo sysctl -w vm.max_map_count=262144
 version: "3.8"
 services:
@@ -27,7 +22,7 @@ services:
       retries: 5
       start_period: 30s
 
-  #Quantum Leap
+  # Quantum Leap
   quantumleap:
     image: orchestracities/quantumleap
     hostname: quantumleap
@@ -36,13 +31,11 @@ services:
       - "8668:8668"
     depends_on:
       - crate-db
-      #- redis-db
     environment:
       - CRATE_HOST=crate-db
       - LOGLEVEL=DEBUG
 
-
-  # Bases de datos
+  # MongoDB
   mongo-db:
     image: mongo:3.6
     hostname: mongo-db
@@ -56,6 +49,7 @@ services:
     volumes:
       - mongo-db:/data/db
 
+  # CrateDB
   crate-db:
     image: crate
     hostname: crate-db
@@ -70,7 +64,7 @@ services:
     volumes:
       - crate-db:/data
 
-  # visualizacion
+  # Grafana
   grafana:
     image: grafana/grafana
     container_name: grafana
@@ -80,6 +74,37 @@ services:
       - "3000:3000"
     volumes:
       - grafana:/var/lib/grafana
+
+  # Data Receiver Service
+  data_receiver:
+    build:
+      context: ./backend  # Context is the backend directory
+      dockerfile: Dockerfile
+    container_name: data_receiver
+    depends_on:
+      - crate-db
+    networks:
+      - default
+    ports:
+    - "80:80"  # Expose port 80 for external access
+    command: python3 data_receiver.py  # Command to run the script
+    environment:
+      - CRATE_HOST=db-crate  # Example environment variable
+
+  # App Service
+  app:
+      build:
+        context: ./backend  # Context is the backend directory
+        dockerfile: Dockerfile
+      container_name: app
+      depends_on:
+        - data_receiver
+        - crate-db
+      ports:
+        - "8050:8050"  # Expose Dash app on port 8050
+      networks:
+        - default
+      command: python3 ../frontend/app.py  # Access app.py from the frontend folder
 
 networks:
   default:
